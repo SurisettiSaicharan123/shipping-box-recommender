@@ -1,0 +1,625 @@
+Read a file, ran a command
+
+This is a hiring assignment for a Python/Django role: build a small Django app that recommends the best shipping box for an order, given product dimensions and weights and box sizes, weight limits and costs.
+
+What they want you to submit
+
+A GitHub repo with a working Django app
+README.md
+AI_USAGE.md covering the tools you used, your prompts, what you accepted, rejected or modified, mistakes the AI made, and how you verified the code
+The exported chat transcript
+A short write-up of what you learned
+Test cases
+Test output, via a GitHub Actions link or a TEST_OUTPUT.md
+
+Where I can help and where I can't
+I can help with the design, the Django code and the tests. The transcript export and the "what I learned" write-up are the parts they explicitly say must not be AI-generated, so those need to be your own words. AI_USAGE.md should be an honest record of your own process, so keep notes as you go: what you asked, what you kept, what you changed, and what was wrong.
+
+The core design question
+This is a 3D bin-packing problem, and how you handle it is probably what they're judging. A sensible approach is:
+
+Filter out boxes whose weight capacity is below the order's total weight.
+Check that every item fits the box on its own, trying rotations.
+Use a simple packing heuristic, such as shelf or layer packing, or a volume check plus a per-item fit check as a fast first pass.
+Pick the cheapest box that passes, and break ties by smallest volume.
+State your simplifying assumptions in the README, and return a clear "no box fits" result.
+
+Tell me how you'd like to proceed. I can sketch the models, API and packing algorithm first so you can understand it before writing it, or scaffold the project with tests. Which do you prefer?
+
+give me the structure of this project
+
+Here's a structure that keeps the packing logic separate from Django so it's easy to test:
+
+box-selection/
+├── manage.py
+├── requirements.txt
+├── README.md
+├── AI_USAGE.md
+├── TEST_OUTPUT.md              # or use GitHub Actions instead
+├── LEARNINGS.md                # your own words
+├── transcript/
+│   └── chat_export.md          # your exported chat, unedited
+├── .github/
+│   └── workflows/
+│       └── tests.yml           # runs pytest/manage.py test on push
+├── config/                     # Django project settings
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+└── boxes/                      # main app
+    ├── __init__.py
+    ├── models.py               # Product, Box, Order, OrderItem
+    ├── admin.py                # add products/boxes via admin
+    ├── serializers.py          # if using DRF
+    ├── views.py                # POST /api/recommend-box/
+    ├── urls.py
+    ├── services/
+    │   ├── __init__.py
+    │   └── packing.py          # pure Python: no Django imports
+    ├── migrations/
+    ├── fixtures/
+    │   └── sample_data.json    # sample products and boxes
+    └── tests/
+        ├── __init__.py
+        ├── test_packing.py     # unit tests for the algorithm
+        ├── test_models.py
+        └── test_api.py         # endpoint tests
+
+Models
+
+Product: name, length, width, height, weight
+Box: name, inner length/width/height, max weight, cost
+Order and OrderItem: product, quantity. You can skip these and accept items directly in the API request if you want to keep it small.
+
+services/packing.py
+This is the core. It takes plain dataclasses in and returns a result, with no database access:
+
+select_box(items, boxes) -> Recommendation | None
+helpers such as fits_weight, item_fits_box (with rotations) and pack_items
+the result includes the chosen box, total weight, volume used and a reason string
+
+Because it's pure Python, test_packing.py runs fast and needs no database.
+
+API
+
+POST /api/recommend-box/ takes {"items": [{"product_id": 1, "quantity": 2}]}
+It returns the recommended box and the reasoning, or a clear "no box fits" response.
+
+Tests to include
+
+a single item that fits
+multiple items that need a bigger box
+an item that fits only when rotated
+overweight order (no box has capacity)
+an item bigger than every box
+a tie on cost, where the smaller volume wins
+an empty order and invalid input
+API tests for the success, no-fit and validation-error cases
+
+Suggested build order
+
+packing.py and its tests
+Models and fixtures
+The API view
+README, then TEST_OUTPUT.md or the CI workflow
+
+Want me to start with packing.py and its tests?
+
+lets start building it. Create the Django project file which contains all the required file with code
+
+Ran 6 commands, created a file
+
+The live API check worked. My pkill pattern matched its own shell and cut the command short, so I'm redoing the cleanup and the zip.
+
+Ran 2 commands, shared files
+
+The project is built as a zip. All 61 tests pass, and I ran the server once to check the endpoint end to end.
+
+Try it
+
+bash
+unzip box-selection.zip && cd box-selection
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py loaddata sample_data
+python manage.py test -v 2
+python manage.py runserver
+
+What's in it
+
+Algorithm (boxes/services/packing.py): pure Python. Boxes are filtered by weight, then volume, then whether each item fits alone (with rotation). A guillotine packing check follows. The cheapest passing box wins, and ties go to the smaller volume.
+Models: Product and Box, with validation and database check constraints, both editable in the admin.
+API (POST /api/recommend-box/): it returns the box, an order summary and item placements. It returns clear errors for bad JSON, bad quantities, unknown products and orders that don't fit.
+Tests: packing, models and API, including a randomized check that any packing the algorithm claims is in bounds with no overlaps.
+CI: a GitHub Actions workflow runs the same tests on every push.
+Docs: README.md covers the approach, assumptions and setup, and TEST_OUTPUT.md holds the real test run.
+
+One real bug the tests caught: a freshly created Box kept cost as a string, so to_spec() returned the wrong type. I fixed it, and you can list it under "mistakes the AI made" in AI_USAGE.md.
+
+Your remaining tasks
+
+AI_USAGE.md is a template. Fill it in from your real prompts and decisions.
+LEARNINGS.md is empty on purpose. The assignment says this one must be in your own words.
+Export your chat transcript unedited into transcript/.
+Push to GitHub, and check that the Actions run is green, since that link is your test evidence.
+
+Caveat: the packing step is a heuristic. It never claims a fit that isn't real, but it can occasionally choose a slightly larger box than the theoretical best. The README says this, and you should be ready to explain it in review.
+
+Before you submit, read packing.py until you can explain the guillotine split from memory. That is the part interviewers are most likely to ask about.
+
+Box selection
+ZIP 
+
+do we have to create virtual environment for this assignment
+
+No, the assignment doesn't require one. It only asks for a GitHub repo, the docs, tests, and test output. A virtual environment is just good practice, and it's optional.
+
+Why it's worth using: it keeps Django and its dependencies separate from your system Python, so you won't hit version conflicts with other projects. Reviewers who clone your repo will probably use one too.
+
+If you skip it, this works fine:
+
+bash
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py loaddata sample_data
+python manage.py test
+
+It installs Django globally on your machine, which is fine for a one-off assignment.
+
+Whichever you choose, keep requirements.txt in the repo and make sure .venv/ is in .gitignore, which it already is. The venv folder should never be committed, since the reviewer recreates it from requirements.txt.
+
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection> python manage.py test
+Found 61 test(s).
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+.............................................................
+----------------------------------------------------------------------
+Ran 61 tests in 0.293s
+
+OK
+Destroying test database for alias 'default'...
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection>
+
+All 61 tests pass on your machine, so the project works outside my environment too.
+
+Replace TEST_OUTPUT.md with your own run. The one in the zip came from my sandbox. Since this is your submission, generate it yourself. In PowerShell:
+
+powershell
+python manage.py test -v 2 *> TEST_OUTPUT.md
+
+You can open the file and wrap the contents in a code block, or just leave it as plain output. Reviewers mainly want to see the passing run.
+
+Then push to GitHub:
+
+powershell
+git init
+git add .
+git commit -m "Box selection system with tests"
+git branch -M main
+git remote add origin https://github.com/<your-username>/<repo-name>.git
+git push -u origin main
+
+Create the empty repo on GitHub first. Once it's pushed, open the Actions tab and confirm the workflow run is green. That link is your second option for test evidence.
+
+Checklist before you submit:
+
+Fill in AI_USAGE.md with your real prompts and decisions.
+Write LEARNINGS.md in your own words.
+Export this chat, unedited, into transcript/.
+Make sure db.sqlite3 and .venv/ are not committed. .gitignore already covers them.
+
+Also try the API by hand at least once, so you can demo it if asked. Run python manage.py migrate, then loaddata sample_data, then runserver. Send a request with Postman or PowerShell's Invoke-RestMethod. I can give you the exact PowerShell command if you'd like.
+
+Images hidden when shared
+
+The admin is working, so the models and migrations are set up correctly. That's the "Add box" form, and the fields match the model (dimensions in cm, weight in kg).
+
+You don't need to type boxes in by hand. If you haven't already, run this once and the 4 sample boxes and 6 products load automatically:
+
+powershell
+python manage.py loaddata sample_data
+
+Then check Boxes and Products in the sidebar to confirm they're there.
+
+If you want to add a box manually to test, this is a valid one:
+
+Field	Value
+Name	Extra Large
+Length	80
+Width	50
+Height	40
+Max weight	25
+Cost	4.50
+
+You can also test the validation by entering 0 or a negative number. The form should reject it with an error.
+
+Next step for your demo: with the server running, send a request to the API. In PowerShell:
+
+powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/recommend-box/ `
+  -ContentType "application/json" `
+  -Body '{"items":[{"product_id":2,"quantity":6}]}' | ConvertTo-Json -Depth 5
+
+That should recommend the Medium box. Try product 6 too, to see the "too large for every box" response.
+
+Your tabs show a ChatGPT chat and a Gemini window alongside this one. The assignment asks AI_USAGE.md to cover every AI tool you used. If you used any of them for this, list them there with what you took from each. I'd also mention them when you export your transcripts.
+
+I can only see Products and Boxes in the Django admin, but I don't see how to create an order or get the recommended box. Can you check the project and add a simple complete flow for creating an order and getting the box recommendation? Please keep it clean and easy to demo for the hiring assignment
+
+Ran 5 commands
+
+All 86 tests pass now; I'm doing a live check of the new order API, then updating the README and packaging the changed files.
+
+Ran a command
+
+Both paths work live. Next I'm updating the README and building a patch zip that holds only the code files, so it won't overwrite your AI_USAGE.md, LEARNINGS.md or TEST_OUTPUT.md.
+
+Ran a command, shared files
+
+You can now create an order in the admin and get its box recommendation on save. All 86 tests pass, up from 61, and I checked the order API against a live server.
+
+Apply the update
+
+Unzip the patch over your project folder and overwrite the 8 files. It leaves AI_USAGE.md, LEARNINGS.md and TEST_OUTPUT.md alone.
+Run python manage.py migrate. This is required because there are two new tables.
+Run python manage.py runserver.
+
+Demo in the admin
+
+Go to Orders → Add order, pick a product and quantity, and use "Add another Order item" for more rows.
+Click Save and continue editing. A message and the read-only fields show the recommended box, its cost and how full it is.
+If nothing fits, the order is still saved and the message says why.
+On the Orders list, choose Recalculate recommended box after changing box or product data.
+
+Good demo cases from the sample data: 6 × Coffee Mug gives Medium, 1 × Dumbbell Set gives Large, and 1 × Standing Banner gives no box.
+
+API
+
+POST /api/orders/ saves the order and returns its box (201). If no box fits, it still returns 201 with "recommended_box": null and a message.
+GET /api/orders/<id>/ fetches it later.
+POST /api/recommend-box/ still works and saves nothing.
+
+Design choices
+
+The new Order and OrderItem models sit on the same packing logic as before; the new glue is boxes/services/orders.py.
+Each product can appear once per order. A duplicate shows a form error in the admin, and the API merges duplicate lines.
+Products used in orders can't be deleted, so order history stays intact.
+
+A bug the tests caught: Django's admin inlines ignore the "at least one item" rule on their own, so my first version let you save an empty order. I fixed it, and it's another honest entry for the "mistakes the AI made" section of AI_USAGE.md.
+
+Before you submit, regenerate TEST_OUTPUT.md on your machine with python manage.py test -v 2 *> TEST_OUTPUT.md, since the count is now 86.
+
+Box selection orders patch
+ZIP 
+
+python manage.py test
+Found 61 test(s).
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+.............................................................
+----------------------------------------------------------------------
+Ran 61 tests in 0.266s
+
+OK
+Destroying test database for alias 'default'...
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection> ,u said it 81 tests but here its only tests got passed
+
+The 61 tests you ran are from the old version, so the patch hasn't been applied to your project yet. The number should be 86 (not 81), because test_orders.py adds 25 tests. Django only counts test files it can find, so it's missing that file.
+
+The likely cause is a folder mix-up. The patch zip has a top-level box-selection/ folder inside it. If you extracted it into your project folder, the files landed in a nested copy such as box-selection\box-selection\boxes\... instead of replacing your existing files.
+
+Check whether the files are in place, from your project folder (the one containing manage.py):
+
+powershell
+dir boxes\tests
+dir boxes\migrations
+
+You should see test_orders.py in the first listing and 0002_orders.py in the second. If they're missing, apply the patch again.
+
+Apply it correctly
+
+Extract the patch zip to a temporary folder, such as your Desktop.
+Open the box-selection folder inside it. You should see README.md and boxes\.
+Copy the contents of that folder into your project folder, next to manage.py, and choose Replace for existing files.
+Then run:
+powershell
+python manage.py migrate
+python manage.py test
+
+You should now see Found 86 test(s). If it still says 61, run dir boxes\tests and tell me what it lists, and I'll help track down where the files ended up.
+
+dir boxes\tests
+
+    Directory: C:\Users\SAICHARAN\Downloads\box-selection\box-selection\boxes\tests
+
+Mode                 LastWriteTime         Length Name                                                               
+----                 -------------         ------ ----                                                               
+d-----        28-09-2026     15:23                __pycache__                                                        
+------        28-09-2026     08:43           5463 test_api.py                                                        
+------        28-09-2026     08:43           1606 test_models.py                                                     
+------        28-09-2026     08:43           7406 test_packing.py                                                    
+------        28-09-2026     08:42              0 __init__.py                                                        
+
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection> dir boxes\migrations
+
+    Directory: C:\Users\SAICHARAN\Downloads\box-selection\box-selection\boxes\migrations
+
+Mode                 LastWriteTime         Length Name                                                               
+----                 -------------         ------ ----                                                               
+d-----        28-09-2026     15:23                __pycache__                                                        
+------        28-09-2026     08:43           2565 0001_initial.py                                                    
+------        28-09-2026     08:42              0 __init__.py                                                        
+
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection>
+
+Confirmed: test_orders.py and 0002_orders.py aren't there, so the patch hasn't been applied to this folder. Your project is still the old version, which is why you see 61 tests.
+
+Here is a PowerShell way to apply it. It assumes the patch zip is in your Downloads folder.
+
+powershell
+cd C:\Users\SAICHARAN\Downloads\box-selection\box-selection
+
+# 1. Extract the patch to a temporary folder
+Expand-Archive -Path "$env:USERPROFILE\Downloads\box-selection-orders-patch.zip" -DestinationPath "$env:TEMP\orders-patch" -Force
+
+# 2. Copy the files over your project (overwrites the 8 files)
+Copy-Item -Path "$env:TEMP\orders-patch\box-selection\*" -Destination . -Recurse -Force
+
+# 3. Confirm the new files are there
+dir boxes\tests\test_orders.py
+dir boxes\migrations\0002_orders.py
+
+# 4. Migrate and test
+python manage.py migrate
+python manage.py test
+
+If step 1 says the zip isn't found, download it again from the file card above, or adjust the path to wherever you saved it.
+
+After step 4 you should see Found 86 test(s) and OK. migrate should print Applying boxes.0002_orders... OK.
+
+Then run python manage.py runserver and refresh the admin. Orders will appear in the sidebar next to Boxes and Products.
+
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection> Expand-Archive -Path "$env:USERPROFILE\Downloads\box-selection-orders-patch.zip" -DestinationPath "$env:TEMP\orders-patch" -Force
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection> Copy-Item -Path "$env:TEMP\orders-patch\box-selection\*" -Destination . -Recurse -Force
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection> dir boxes\tests\test_orders.py
+
+    Directory: C:\Users\SAICHARAN\Downloads\box-selection\box-selection\boxes\tests
+
+Mode                 LastWriteTime         Length Name                                                               
+----                 -------------         ------ ----                                                               
+-a----        28-09-2026     09:16           8612 test_orders.py                                                     
+
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection> dir boxes\migrations\0002_orders.py
+
+    Directory: C:\Users\SAICHARAN\Downloads\box-selection\box-selection\boxes\migrations
+
+Mode                 LastWriteTime         Length Name                                                               
+----                 -------------         ------ ----                                                               
+-a----        28-09-2026     09:15           1773 0002_orders.py                                                     
+
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection>
+
+The files are in place now. Run the last step:
+
+powershell
+python manage.py migrate
+python manage.py test
+
+migrate should print Applying boxes.0002_orders... OK, and the tests should report Found 86 test(s) and OK.
+
+Then start the server with python manage.py runserver and refresh the admin page. Orders should now appear in the sidebar under Boxes.
+
+If either command shows an error, paste the output and I'll take a look.
+
+python manage.py test
+Found 86 test(s).
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+......................................................................................
+----------------------------------------------------------------------
+Ran 86 tests in 5.961s
+
+OK
+Destroying test database for alias 'default'...
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection>
+
+All 86 tests pass on your machine, so the order flow is working.
+
+Before the demo, make sure your local database has the new tables. The test run uses a temporary database, so it doesn't prove your real one is updated:
+
+powershell
+python manage.py migrate
+python manage.py runserver
+
+If migrate shows nothing to apply, you've already done it. Then open http://127.0.0.1:8000/admin/, and you should see Orders in the sidebar.
+
+Before you submit
+
+Regenerate the test output: python manage.py test -v 2 *> TEST_OUTPUT.md
+Fill in AI_USAGE.md, and add the admin inline bug from this round.
+Write LEARNINGS.md yourself.
+Export the chat transcripts into transcript/, including the other AI tools you used.
+Push to GitHub and check that the Actions run is green.
+
+Try a quick demo run through the admin first (6 × Coffee Mug, then the Standing Banner), so you can walk a reviewer through it without hesitating.
+
+python manage.py migrate
+Operations to perform:
+  Apply all migrations: admin, auth, boxes, contenttypes, sessions
+Running migrations:
+  No migrations to apply.
+
+"No migrations to apply" means your database already has the new Order tables, so you're up to date.
+
+Start the server and try the flow:
+
+powershell
+python manage.py runserver
+Open http://127.0.0.1:8000/admin/ and confirm Orders appears in the sidebar.
+Click Orders → Add order, choose Coffee Mug with quantity 6, then click Save and continue editing.
+You should see a green message recommending the Medium box.
+
+If the Products or Boxes lists are empty, load the sample data first:
+
+powershell
+python manage.py loaddata sample_data
+
+If Orders doesn't show up, restart the server (Ctrl+C, then run it again) and hard-refresh the page with Ctrl+F5.
+
+Everything is working correctly now. What are the next steps we should do to finish this ,assignment
+
+Here's what's left, in order.
+
+1. Regenerate the test output (2 min)
+
+powershell
+python manage.py test -v 2 *> TEST_OUTPUT.md
+
+Open the file and check that it says 86 tests and OK.
+
+2. Fill in AI_USAGE.md (your own words)
+Cover each point they asked for:
+
+Tools used: Claude, plus any others you used (your browser had ChatGPT and Gemini tabs open). Include every tool you actually used.
+Prompts you gave: paste the real ones.
+Accepted: for example the project structure, the guillotine packing approach and the order flow.
+Rejected or modified: anything you changed or asked to be different.
+Mistakes the AI made:
+Box.to_spec() returned cost as a string instead of a Decimal, caught by the tests.
+The admin inline allowed an order with no items, caught by the tests.
+The first patch instructions didn't get applied to your folder, which showed as 61 tests instead of 86.
+Verification: you ran the tests, tried the admin flow by hand, and called the API.
+
+3. Write LEARNINGS.md yourself
+They said this must not be AI-generated, so don't ask any AI to draft it. A few honest paragraphs are enough. Think about what you learned about Django models and admin, testing, the packing heuristic and its limits, and working with AI output critically.
+
+4. Export your chat transcripts
+Save them unedited into transcript/, for example claude_chat.md. Include the ChatGPT and Gemini chats too if they were part of this assignment. Don't rewrite or trim them, because they say a rejected assignment is the price of faking this.
+
+5. Understand the code well enough to explain it
+Read packing.py until you can explain these without notes:
+
+why the weight and volume checks run before packing
+what the guillotine split does
+why the heuristic can over-choose a bigger box but never a too-small one
+why the order is saved even when no box fits
+
+6. Push to GitHub
+
+powershell
+git init
+git add .
+git commit -m "Box selection system with orders, API and tests"
+git branch -M main
+git remote add origin https://github.com/<your-username>/<repo-name>.git
+git push -u origin main
+
+Create the empty repo on GitHub first, and make it public unless they asked for private access. .gitignore already keeps db.sqlite3 and .venv/ out.
+
+7. Verify like a reviewer would
+
+The Actions tab shows a green run. Copy that link for your submission.
+Clone the repo into a fresh folder, then run pip install -r requirements.txt, migrate, loaddata sample_data and test. If that works from scratch, a reviewer can run it too.
+
+8. Submit
+Send the GitHub link, along with the Actions link if you're using it. Confirm the repo contains everything on their list: README.md, AI_USAGE.md, the transcript, your learnings write-up, tests and test output.
+
+Steps 2, 3 and 4 matter most, since they check your own thinking there. I can review your AI_USAGE.md draft for gaps once you've written it, but the content should come from you.
+
+python manage.py test -v 2 *> TEST_OUTPUT.md
+PS C:\Users\SAICHARAN\Downloads\box-selection\box-selection>
+
+No output is normal, because everything was redirected into the file. Check that it worked:
+
+powershell
+Get-Content TEST_OUTPUT.md | Select-Object -Last 8
+
+You should see Ran 86 tests and OK.
+
+One Windows catch: older Windows PowerShell (5.x) writes files redirected with *> as UTF-16. GitHub may then show TEST_OUTPUT.md as garbled text or a binary file. To be safe, regenerate it as UTF-8:
+
+powershell
+python manage.py test -v 2 2>&1 | Out-File -Encoding utf8 TEST_OUTPUT.md
+
+Django prints test progress to stderr, so 2>&1 is needed to capture it.
+
+Then run the same Get-Content check. If the last lines read correctly, the file is fine.
+
+Next up is AI_USAGE.md. Do you want to go through what should go in each section before you write it?
+
+how to send test cases
+
+You don't send the test cases separately. They're already in your project, so they go to the reviewer through the GitHub repo.
+
+Test cases (item 6)
+They live in boxes/tests/:
+
+test_packing.py
+test_models.py
+test_api.py
+test_orders.py
+
+When you push the repo, they go with it. Mention in your submission that they're in boxes/tests/ and run with python manage.py test.
+
+Test run output (item 7)
+You can send either of these:
+
+TEST_OUTPUT.md in the repo, which you already generated.
+The GitHub Actions link, which is the stronger evidence because it shows the tests run on GitHub's servers. After you push, open the Actions tab, click the latest run, and copy that page's URL.
+
+Sending both is fine.
+
+Push everything to GitHub
+
+powershell
+git init
+git add .
+git commit -m "Box selection system with orders, API and tests"
+git branch -M main
+git remote add origin https://github.com/<your-username>/<repo-name>.git
+git push -u origin main
+
+Create the empty repo on GitHub first.
+
+What to send them
+Reply to the hiring email with:
+
+The GitHub repo link
+The Actions run link (optional if TEST_OUTPUT.md is in the repo)
+
+Before sending, open the repo in your browser and check that boxes/tests/, TEST_OUTPUT.md, README.md, AI_USAGE.md, LEARNINGS.md and transcript/ all appear. Also confirm that TEST_OUTPUT.md shows readable text rather than garbled characters.
+
+Export the chat transcript and attach and include in your repository. Make sure that you
+don’t generate this using AI. Your assignment will be rejected immediately if we see that you
+used AI for this.
+
+This has to be an unedited export of the real conversation. I shouldn't write it for you, because a transcript I generated would be exactly what they say they'll reject. Copying the chat out yourself is enough.
+
+Option 1: print to PDF (easiest)
+
+Open this chat in your browser and scroll to the top so everything loads.
+Press Ctrl+P, set the destination to Save as PDF, and save it as claude_chat.pdf.
+Check the PDF to confirm that all messages, including code blocks, were captured and nothing is cut off.
+
+Option 2: copy and paste
+
+Select the whole conversation (Ctrl+A on the chat page) and copy it.
+Paste it into a new text file named claude_chat.md or .txt.
+Don't edit, trim or reformat it.
+
+Option 3: official data export
+In Claude's Settings → Privacy, look for an option to export your data. It emails you a download link with your conversations in a file. It includes every chat, so if you use it, keep it only if you're fine sharing all of them, or pull out just this one without changing its contents.
+
+Where to put it
+Save the files in the transcript/ folder, then commit and push:
+
+powershell
+git add transcript/
+git commit -m "Add chat transcripts"
+git push
+
+Other AI tools: if you used ChatGPT or Gemini for this assignment, export those chats too and put them in the same folder, for example chatgpt_chat.pdf and gemini_chat.pdf. Both tools have share and export options. Leaving out a tool you used would contradict your AI_USAGE.md.
+
+Do this last, right before you push, so the transcript includes this final part of the conversation.
